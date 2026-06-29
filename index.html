@@ -366,7 +366,7 @@ function saveKey(){
   _key=v; localStorage.setItem('olive_api_key',v); setMsg('✅ Ключ сохранён','ok');
 }
 
-// ── Claude API ──
+// ── Claude API (базовый вызов) ──
 async function callClaude(system, user, maxTok=4096){
   if(!_key) throw new Error('API ключ не задан');
   log(`→ Claude API (max_tokens=${maxTok})...`);
@@ -384,6 +384,63 @@ async function callClaude(system, user, maxTok=4096){
   const data=await res.json(), text=data.content?.[0]?.text||'';
   log(`← Получено: ${text.length} символов`);
   return text;
+}
+
+// ── Claude API с Web Search (реальный поиск в интернете) ──
+// Claude сам ищет в интернете через инструмент web_search_20250305
+async function callClaudeWithSearch(system, user, maxTok=4096){
+  if(!_key) throw new Error('API ключ не задан');
+  log(`→ Claude + WebSearch (max_tokens=${maxTok})...`);
+
+  const HEADERS = {
+    'x-api-key':_key,
+    'anthropic-version':'2023-06-01',
+    'anthropic-dangerous-direct-browser-access':'true',
+    'content-type':'application/json'
+  };
+
+  let messages = [{ role:'user', content:user }];
+  let allText = '';
+
+  // Цикл multi-turn: Claude ищет → получает результаты → пишет ответ
+  for(let round=0; round<8; round++){
+    const body = {
+      model:'claude-sonnet-4-6',
+      max_tokens: maxTok,
+      system,
+      tools:[{ type:'web_search_20250305', name:'web_search' }],
+      messages
+    };
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST', headers:HEADERS, body:JSON.stringify(body)
+    });
+    if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||`HTTP ${res.status}`); }
+    const data = await res.json();
+
+    // Собираем весь текст из ответа
+    const texts = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text);
+    if(texts.length) allText += texts.join('');
+
+    log(`← Раунд ${round+1}: stop_reason=${data.stop_reason}, blocks=${data.content?.length}`);
+
+    // Если Claude закончил — выходим
+    if(data.stop_reason === 'end_turn' || data.stop_reason === 'stop') break;
+
+    // Если Claude использовал поиск — продолжаем разговор
+    if(data.stop_reason === 'tool_use'){
+      messages.push({ role:'assistant', content: data.content });
+      // tool_result для каждого tool_use блока (Anthropic выполняет поиск на своей стороне)
+      const toolResults = (data.content||[])
+        .filter(b=>b.type==='tool_use')
+        .map(b=>({ type:'tool_result', tool_use_id:b.id, content:'' }));
+      messages.push({ role:'user', content: toolResults });
+    } else {
+      break; // любой другой stop_reason — выходим
+    }
+  }
+
+  log(`← Итого получено: ${allText.length} символов`);
+  return allText;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -433,7 +490,7 @@ TONE OF VOICE: как умный друг который делится крут
 - СТРУКТУРА — один из: Чеклист / Таймлайн / Миф vs Правда / Эксперимент / Рейтинг / История с конца / Экспертный разбор / Эмпатия + наука
 - ПОЧЕМУ СЕЙЧАС — связь с актуальным трендом`;
 
-  return callClaude(sys, usr, 3500);
+  return callClaudeWithSearch(sys, usr, 3500); // реальный поиск в интернете
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -511,7 +568,7 @@ ${trends.slice(0,800)}`;
 ${trends.slice(0,800)}`;
   }
 
-  return callClaude(sys, usr, 2500);
+  return callClaudeWithSearch(sys, usr, 2500); // реальный поиск аккаунтов и метрик
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -888,8 +945,8 @@ async function runWorkflow(){
     progress(3,'Шаг 1: Ищем тренды (4-5 источников)...');
     log('ШАГ 1 — тренды: 4-5 параллельных источников + фильтрация + топ-10 идей с хуком и форматом');
     const trends = await step1_trends(from, to);
-    const ideasCount = (trends.match(/^\d+\./mg)||[]).length;
-    setStep('s1','done', `Тренды найдены · ${ideasCount} идей для роликов сформировано`);
+    const ideasCount = (trends.match(/\d+[\.\)]/g)||[]).length;
+    setStep('s1','done', `Тренды и топ-${ideasCount||10} идей для роликов готовы`);
     progress(18,'Шаг 1 ✓ — тренды и идеи готовы');
 
     // ── ШАГ 2: Вирусные ролики ──
