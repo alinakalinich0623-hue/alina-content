@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>O-Live | Content Workflow</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:#2D6A4F; --olive:#4A7C59; --accent:#40916C;
+      --light:#EAF4EE; --border:#D1E8DA; --gray:#6B7280;
+      --dark:#1F2937; --bg:#F0F7F4; --red:#DC2626; --ok:#16A34A;
+      --yellow:#FEF9C3; --yellow-b:#FCD34D;
+      --shadow:0 2px 10px rgba(45,106,79,.10);
+    }
+    body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--dark); min-height:100vh; line-height:1.5; }
+
+    /* ── Header ── */
+    .header { background:var(--green); color:#fff; padding:18px 40px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 14px rgba(0,0,0,.18); }
+    .header-logo { width:44px; height:44px; background:rgba(255,255,255,.18); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; }
+    .header h1 { font-size:19px; font-weight:700; }
+    .header p  { font-size:12px; opacity:.75; }
+
+    /* ── Layout ── */
+    .container { max-width:860px; margin:24px auto; padding:0 20px; display:flex; flex-direction:column; gap:18px; }
+
+    /* ── Card ── */
+    .card { background:#fff; border-radius:14px; padding:22px 24px; box-shadow:var(--shadow); border:1.5px solid var(--border); }
+    .card-title { font-size:14px; font-weight:700; color:var(--green); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom:13px; }
+    .form-group label { display:block; font-size:11px; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    input[type="text"],input[type="date"],input[type="password"],textarea,select {
+      width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px;
+      font-size:14px; color:var(--dark); background:#fff; outline:none; transition:border-color .2s; font-family:inherit;
+    }
+    input:focus,textarea:focus { border-color:var(--accent); }
+    textarea { resize:vertical; min-height:70px; }
+    input[type="range"] { width:100%; accent-color:var(--accent); cursor:pointer; }
+
+    /* ── Buttons ── */
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:all .18s; font-family:inherit; }
+    .btn-primary { background:var(--green); color:#fff; width:100%; padding:13px; font-size:15px; border-radius:10px; }
+    .btn-primary:hover:not(:disabled) { background:var(--olive); }
+    .btn-primary:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-sm { background:transparent; color:var(--green); border:1.5px solid var(--border); padding:7px 13px; font-size:13px; }
+    .btn-sm:hover { border-color:var(--green); }
+    .btn-dl { background:var(--light); color:var(--green); border:1.5px solid var(--border); width:100%; padding:11px; font-size:14px; border-radius:9px; margin-top:10px; }
+    .btn-dl:hover { background:var(--border); }
+
+    /* ── API ── */
+    .api-row { display:flex; gap:8px; }
+    .api-row input { flex:1; }
+    .api-msg { font-size:12px; margin-top:5px; }
+    .api-msg.ok  { color:var(--ok); }
+    .api-msg.err { color:var(--red); }
+
+    /* ── Warn / Info boxes ── */
+    .warn-box { background:var(--yellow); border:1.5px solid var(--yellow-b); border-radius:10px; padding:11px 15px; font-size:13px; color:#92400E; }
+    .info-box { background:var(--light); border:1.5px solid var(--border); border-radius:10px; padding:11px 15px; font-size:13px; color:var(--dark); }
+    .info-box strong { color:var(--green); }
+
+    /* ── Accounts list (collapsible) ── */
+    .accs-toggle { font-size:12px; color:var(--accent); cursor:pointer; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+    .accs-list { display:none; margin-top:10px; }
+    .accs-list.open { display:block; }
+    .accs-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 16px; font-size:12px; color:var(--dark); }
+    .acc-item { padding:3px 0; border-bottom:1px solid var(--light); }
+    .acc-item a { color:var(--accent); text-decoration:none; font-weight:600; }
+
+    /* ── Steps ── */
+    .steps { display:flex; flex-direction:column; gap:9px; }
+    .step { display:flex; align-items:flex-start; gap:13px; padding:12px 15px; border-radius:10px; border:1.5px solid var(--border); background:#FAFFFE; transition:all .3s; }
+    .step.running { border-color:var(--accent); background:var(--light); }
+    .step.done    { border-color:var(--ok); background:#F0FDF4; }
+    .step.error   { border-color:var(--red); background:#FEF2F2; }
+    .snum { width:28px; height:28px; border-radius:50%; background:var(--border); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--gray); flex-shrink:0; margin-top:2px; }
+    .step.running .snum { background:var(--accent); color:#fff; }
+    .step.done    .snum { background:var(--ok);     color:#fff; }
+    .step.error   .snum { background:var(--red);    color:#fff; }
+    .sbody { flex:1; min-width:0; }
+    .stitle { font-size:13.5px; font-weight:700; }
+    .ssub   { font-size:12px; color:var(--gray); margin-top:2px; line-height:1.4; }
+    .sico   { font-size:18px; flex-shrink:0; margin-top:2px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { width:18px; height:18px; border:2.5px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .75s linear infinite; flex-shrink:0; }
+
+    /* ── Progress bar ── */
+    .pbar-wrap { height:6px; background:var(--border); border-radius:4px; overflow:hidden; margin:4px 0 13px; }
+    .pbar-fill  { height:100%; background:var(--accent); border-radius:4px; transition:width .5s ease; }
+
+    /* ── Results ── */
+    .res-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:16px; }
+    .res-card { border:1.5px solid var(--border); border-radius:12px; padding:18px 16px; text-align:center; }
+    .res-icon { font-size:32px; margin-bottom:6px; }
+    .res-name { font-size:14px; font-weight:700; margin-bottom:3px; }
+    .res-meta { font-size:12px; color:var(--gray); }
+
+    /* ── Preview ── */
+    .preview { background:var(--light); border-radius:8px; padding:13px; font-size:12px; line-height:1.65; max-height:200px; overflow-y:auto; white-space:pre-wrap; font-family:'Courier New',monospace; color:var(--dark); border:1px solid var(--border); margin-top:6px; }
+
+    /* ── Log ── */
+    .log { background:#111827; border-radius:8px; padding:12px; font-family:'Courier New',monospace; font-size:11.5px; color:#6ee7b7; max-height:140px; overflow-y:auto; display:none; margin-top:10px; }
+    .log.open { display:block; }
+    .log-toggle { font-size:12px; color:var(--gray); cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+
+    /* ── Misc ── */
+    .hidden { display:none !important; }
+    .hint { font-size:11.5px; color:var(--gray); margin-top:4px; }
+    .section-sep { border:none; border-top:1.5px solid var(--light); margin:14px 0; }
+
+    @media (max-width:580px) { .form-row,.res-grid,.accs-grid { grid-template-columns:1fr; } .header { padding:14px; } .card { padding:18px; } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">🌿</div>
+  <div>
+    <h1>O-Live Content Workflow</h1>
+    <p>6 шагов: тренды → ролики → транскрипция → сценарии → контент-план → файлы</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Предупреждение если файл открыт локально -->
+  <div id="localWarn" class="warn-box hidden">
+    ⚠️ Сайт открыт как локальный файл — Claude API не будет работать (CORS).
+    <strong>Загрузи index.html на GitHub Pages</strong> — тогда всё заработает автоматически.
+  </div>
+
+  <!-- ── 1. API KEY ── -->
+  <div class="card">
+    <div class="card-title">🔑 Anthropic API Key</div>
+    <div class="form-group">
+      <label>Ключ (хранится только в твоём браузере)</label>
+      <div class="api-row">
+        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." autocomplete="off">
+        <button class="btn btn-sm" onclick="saveKey()">Сохранить</button>
+      </div>
+      <div class="api-msg" id="apiMsg"></div>
+    </div>
+    <div class="hint">💡 Получить: <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent)">console.anthropic.com → API Keys</a> · ~$1-2 за один запуск</div>
+  </div>
+
+  <!-- ── 2. ПАРАМЕТРЫ ── -->
+  <div class="card">
+    <div class="card-title">📅 Параметры контент-плана</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Период — с</label>
+        <input type="date" id="dateFrom">
+      </div>
+      <div class="form-group">
+        <label>Период — по</label>
+        <input type="date" id="dateTo">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Количество постов: <strong id="postsNum">16</strong></label>
+      <input type="range" id="postsRange" min="4" max="32" value="16" step="4"
+        oninput="document.getElementById('postsNum').textContent=this.value">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--gray);margin-top:2px">
+        <span>4</span><span>8</span><span>12</span><span>16</span><span>20</span><span>24</span><span>28</span><span>32</span>
+      </div>
+    </div>
+
+    <hr class="section-sep">
+
+    <!-- Ролики (Шаг 2 подготовка) -->
+    <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:10px">🎬 Шаг 2: Вирусные ролики для анализа</div>
+
+    <div class="info-box" style="margin-bottom:12px">
+      <strong>Аккаунты для поиска вирусных роликов</strong> (лайки 5000+, репосты 2000+):<br>
+      <span class="accs-toggle" onclick="toggleAccs()">▶ Показать список аккаунтов из скила</span>
+      <div class="accs-list" id="accsList">
+        <div style="font-size:11px;color:var(--gray);margin:8px 0 4px">Русскоязычные нутрициологи:</div>
+        <div class="accs-grid">
+          <div class="acc-item"><a href="https://www.instagram.com/nutritionist_olesia/reels/" target="_blank">@nutritionist_olesia</a> — Олеся Ревеко, 375к</div>
+          <div class="acc-item"><a href="https://www.instagram.com/nutrinna/reels/" target="_blank">@nutrinna</a> — нутрициолог-биолог, 108к</div>
+          <div class="acc-item"><a href="https://www.instagram.com/lisizinanadin/reels/" target="_blank">@lisizinanadin</a> — нутрициолог 40+, гормоны</div>
+          <div class="acc-item"><a href="https://www.instagram.com/yananutritionist/reels/" target="_blank">@yananutritionist</a> — биохакинг, 110к</div>
+          <div class="acc-item"><a href="https://www.instagram.com/ayala.expert/reels/" target="_blank">@ayala.expert</a> — биохакер, Forbes 30under30</div>
+          <div class="acc-item"><a href="https://www.instagram.com/glucosegoddess/reels/" target="_blank">@glucosegoddess</a> — глюкоза, 6.1М (EN)</div>
+          <div class="acc-item"><a href="https://www.instagram.com/drmarkhyman/reels/" target="_blank">@drmarkhyman</a> — функц. медицина, 3.7М (EN)</div>
+          <div class="acc-item"><a href="https://www.instagram.com/hubermanlab/reels/" target="_blank">@hubermanlab</a> — нейронаука, 7.8М (EN)</div>
+          <div class="acc-item"><a href="https://www.instagram.com/adletdau/reels/" target="_blank">@adletdau</a> — гастроэнтеролог, Астана</div>
+          <div class="acc-item"><a href="https://www.instagram.com/rhondapatrickphd/reels/" target="_blank">@rhondapatrickphd</a> — биохакинг, наука (EN)</div>
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin:8px 0 4px">Конкуренты (только формат подачи, не содержание):</div>
+        <div class="accs-grid">
+          <div class="acc-item"><a href="https://www.instagram.com/freshfit.kz/reels/" target="_blank">@freshfit.kz</a> — питание Алматы (прямой конкурент)</div>
+          <div class="acc-item"><a href="https://www.instagram.com/grow_food/reels/" target="_blank">@grow_food</a> — крупнейшая доставка РФ</div>
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-top:8px">Из каждого аккаунта бери 2–3 лучших ролика. Цель: 8–12 роликов (смесь RU + EN).</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Ссылки на найденные ролики — по одной на строку (8–12 штук)</label>
+      <textarea id="reelsInput" placeholder="https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/...&#10;..."></textarea>
+      <div class="hint">💡 Открой аккаунты выше, найди ролики с лайками 5000+ и репостами 2000+, вставь ссылки сюда. Можно оставить пустым — Claude подберёт референсы сам.</div>
+    </div>
+
+    <div class="form-group">
+      <label>Метрики роликов (опционально — для точного фильтра)</label>
+      <textarea id="metricsInput" style="min-height:60px" placeholder="Ролик 1: 471к просмотров, 14900 лайков, 3200 репостов&#10;Ролик 2: 280к просмотров, 5400 лайков, 2100 репостов"></textarea>
+      <div class="hint">💡 Открой каждый ролик → лайки под видео → репосты рядом с лайками. Порог отбора: лайки 5000+, репосты 2000+</div>
+    </div>
+
+    <button class="btn btn-primary" id="runBtn" onclick="runWorkflow()">🚀 Запустить Workflow (6 шагов)</button>
+  </div>
+
+  <!-- ── PROGRESS ── -->
+  <div class="card hidden" id="progressCard">
+    <div class="card-title">⚡ Выполнение</div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+      <span id="pLabel">Запуск...</span>
+      <span id="pPct" style="font-weight:700;color:var(--accent)">0%</span>
+    </div>
+    <div class="pbar-wrap"><div class="pbar-fill" id="pBar" style="width:0%"></div></div>
+
+    <div class="steps">
+
+      <div class="step" id="s1">
+        <div class="snum">1</div>
+        <div class="sbody">
+          <div class="stitle">Тренды + Топ-10 идей для роликов</div>
+          <div class="ssub" id="s1s">4–5 параллельных источников · фильтрация под O-Live · 10 конкретных идей с хуком и форматом</div>
+        </div>
+        <div class="sico" id="s1i">⏳</div>
+      </div>
+
+      <div class="step" id="s2">
+        <div class="snum">2</div>
+        <div class="sbody">
+          <div class="stitle">Вирусные ролики — анализ и фильтрация</div>
+          <div class="ssub" id="s2s">Оценка метрик (лайки 5000+, репосты 2000+) · формат съёмки · тип контента · итоговая таблица</div>
+        </div>
+        <div class="sico" id="s2i">⏳</div>
+      </div>
+
+      <div class="step" id="s3">
+        <div class="snum">3</div>
+        <div class="sbody">
+          <div class="stitle">Транскрипция + Раскадровка</div>
+          <div class="ssub" id="s3s">Для каждого ролика: формат съёмки · раскадровка по кадрам · полный текст/транскрипция</div>
+        </div>
+        <div class="sico" id="s3i">⏳</div>
+      </div>
+
+      <div class="step" id="s4">
+        <div class="snum">4</div>
+        <div class="sbody">
+          <div class="stitle">Сценарии → .html</div>
+          <div class="ssub" id="s4s">7–8 кадров · хук · проблема · механизм · решение · CTA · референс · O-Live каждый 4-й</div>
+        </div>
+        <div class="sico" id="s4i">⏳</div>
+      </div>
+
+      <div class="step" id="s5">
+        <div class="snum">5</div>
+        <div class="sbody">
+          <div class="stitle">Контент-план → .xlsx</div>
+          <div class="ssub" id="s5s">Пн/Ср/Пт/Вс · тема · хук · полный текст поста · казахский · ссылка · 2 листа</div>
+        </div>
+        <div class="sico" id="s5i">⏳</div>
+      </div>
+
+      <div class="step" id="s6">
+        <div class="snum">6</div>
+        <div class="sbody">
+          <div class="stitle">Генерация файлов</div>
+          <div class="ssub" id="s6s">Сценарии_Олив.html + Контент-план.xlsx готовы к скачиванию</div>
+        </div>
+        <div class="sico" id="s6i">⏳</div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:12px">
+      <span class="log-toggle" onclick="toggleLog()">▶ Подробный лог</span>
+      <div class="log" id="logBox"></div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div class="card hidden" id="resultsCard">
+    <div class="card-title">✅ Готово! Все файлы созданы</div>
+    <div class="res-grid">
+      <div class="res-card">
+        <div class="res-icon">📄</div>
+        <div class="res-name" id="rDocName">Сценарии_Олив.html</div>
+        <div class="res-meta" id="rDocMeta"></div>
+        <div class="res-meta" style="color:var(--accent);margin-top:2px">Открывается в браузере или Word</div>
+        <button class="btn btn-dl" onclick="dlDoc()">⬇️ Скачать сценарии</button>
+      </div>
+      <div class="res-card">
+        <div class="res-icon">📊</div>
+        <div class="res-name" id="rXlsName">Контент-план.xlsx</div>
+        <div class="res-meta" id="rXlsMeta"></div>
+        <div class="res-meta" style="color:var(--accent);margin-top:2px">2 листа: [Месяц] + категории</div>
+        <button class="btn btn-dl" onclick="dlXls()">⬇️ Скачать контент-план</button>
+      </div>
+    </div>
+    <div style="font-size:13px;font-weight:600;color:var(--gray);margin-bottom:4px">Превью первого сценария:</div>
+    <div class="preview" id="preview">—</div>
+    <div style="margin-top:16px;text-align:center">
+      <button class="btn btn-sm" onclick="resetWf()">🔄 Создать новый</button>
+    </div>
+  </div>
+
+  <div style="text-align:center;font-size:12px;color:var(--gray);padding-bottom:28px">
+    O-Live Content Workflow · Powered by Claude AI · 6 шагов строго по скилам
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ SCRIPT ════════════════════════════════════════════ -->
+<script>
+let _key='', _docHtml='', _xlsWb=null, _month='', _logOpen=false;
+
+// ── Init ──
+window.addEventListener('DOMContentLoaded', () => {
+  if (location.protocol==='file:') document.getElementById('localWarn').classList.remove('hidden');
+  const saved = localStorage.getItem('olive_api_key');
+  if (saved) { _key=saved; document.getElementById('apiKey').value=saved; setMsg('✅ Ключ загружен','ok'); }
+  const now=new Date(), from=new Date(now.getFullYear(),now.getMonth()+1,1), to=new Date(now.getFullYear(),now.getMonth()+2,0);
+  document.getElementById('dateFrom').value=fmtDate(from);
+  document.getElementById('dateTo').value=fmtDate(to);
+});
+
+function fmtDate(d){ return d.toISOString().split('T')[0]; }
+function fmtRu(s){ const d=new Date(s+' '), M=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']; return `${d.getDate()} ${M[d.getMonth()]} ${d.getFullYear()}`; }
+function monthName(s){ const d=new Date(s+' '), M=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']; return M[d.getMonth()]+d.getFullYear(); }
+function monthShort(s){ const d=new Date(s+' '), M=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']; return M[d.getMonth()]; }
+function esc(t){ return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function setMsg(t,c){ const e=document.getElementById('apiMsg'); e.className='api-msg '+(c||''); e.textContent=t; }
+function log(t){ const b=document.getElementById('logBox'), now=new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); b.innerHTML+=`<div>[${now}] ${t}</div>`; b.scrollTop=b.scrollHeight; }
+function toggleLog(){ _logOpen=!_logOpen; document.getElementById('logBox').classList.toggle('open',_logOpen); document.querySelector('.log-toggle').textContent=(_logOpen?'▼':'▶')+' Подробный лог'; }
+function toggleAccs(){ const el=document.getElementById('accsList'); el.classList.toggle('open'); document.querySelector('.accs-toggle').textContent=(el.classList.contains('open')?'▼':'▶')+' Показать список аккаунтов из скила'; }
+
+function setStep(id,state,sub){
+  const el=document.getElementById(id); el.className='step '+(state||'');
+  const ico=document.getElementById(id+'i');
+  if(state==='running') ico.innerHTML='<div class="spinner"></div>';
+  else if(state==='done')  ico.textContent='✅';
+  else if(state==='error') ico.textContent='❌';
+  else                     ico.textContent='⏳';
+  if(sub) document.getElementById(id+'s').textContent=sub;
+}
+function progress(pct,label){
+  document.getElementById('pBar').style.width=pct+'%';
+  document.getElementById('pPct').textContent=pct+'%';
+  if(label) document.getElementById('pLabel').textContent=label;
+}
+
+// ── Save key ──
+function saveKey(){
+  const v=document.getElementById('apiKey').value.trim();
+  if(!v.startsWith('sk-ant-')){ setMsg('Ключ должен начинаться с sk-ant-','err'); return; }
+  _key=v; localStorage.setItem('olive_api_key',v); setMsg('✅ Ключ сохранён','ok');
+}
+
+// ── Claude API ──
+async function callClaude(system, user, maxTok=4096){
+  if(!_key) throw new Error('API ключ не задан');
+  log(`→ Claude API (max_tokens=${maxTok})...`);
+  const res = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'x-api-key':_key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true',
+      'content-type':'application/json'
+    },
+    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:maxTok, system, messages:[{role:'user',content:user}] })
+  });
+  if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||`HTTP ${res.status}`); }
+  const data=await res.json(), text=data.content?.[0]?.text||'';
+  log(`← Получено: ${text.length} символов`);
+  return text;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ШАГ 1 — ТРЕНДЫ + ТОП-10 ИДЕЙ
+// Источник: olive-trends-update SKILL.md
+// 4-5 поисковых запросов · фильтрация под O-Live · 10 идей с хуком + форматом + почему сейчас
+// ══════════════════════════════════════════════════════════════════
+async function step1_trends(from, to){
+  const sys = `Ты контент-стратег O-Live — сервиса правильного питания в Алматы (доставка рационов).
+
+АУДИТОРИЯ O-LIVE (всегда держи в голове):
+- 70% женщины, 30% мужчины, 25-45 лет, Алматы, верхняя часть города (платёжеспособные)
+- Занимаются спортом, следят за здоровьем, используют контент как источник новой информации
+- НЕ "хочу похудеть к лету" — умные активные люди, которые хотят оптимизировать себя
+- Сезонный контент (к лету, набор массы) — НИЗКИЙ ПРИОРИТЕТ
+
+ЧТО УБИРАТЬ СРАЗУ:
+- Сезонный контент, темы про экономию, агрессивные диеты
+- Похудение как главная цель
+- Рецепты, готовка, шопинг продуктов
+
+TONE OF VOICE: как умный друг который делится крутой информацией. Тепло, без давления.`;
+
+  const usr = `Сделай 4-5 параллельных поиска актуальных трендов для контент-плана O-Live, период ${fmtRu(from)} — ${fmtRu(to)}.
+
+Направления поиска:
+1. Глобальные тренды питания и здоровья прямо сейчас (текущий год)
+2. Вирусные темы в нутрициологии в Instagram/TikTok
+3. Что сейчас интересует женщин 25-40 в теме здоровья и питания
+4. Тренды биохакинга и оптимизации
+5. Что нового в теме: микробиом, глюкоза, женское здоровье, ментальное питание, гормоны, долголетие
+
+После поиска — отфильтруй: оставь только то, что:
+✓ Релевантно платёжеспособной аудитории Алматы
+✓ Можно связать с едой / питанием / самочувствием
+✓ Имеет образовательный потенциал
+✓ Органично вписывается в TOV O-Live (тепло, без давления)
+
+ЧАСТЬ 1 — ТОП-3 ТРЕНДА ПРЯМО СЕЙЧАС:
+Для каждого: название + 2 предложения почему актуален + связь с O-Live
+
+ЧАСТЬ 2 — ТОП-10 ИДЕЙ ДЛЯ РОЛИКОВ:
+Для каждой идеи ОБЯЗАТЕЛЬНО:
+- ТЕМА — о чём ролик (конкретно)
+- ХУК — первая фраза которая цепляет (не более 10 слов, конкретика, без вводных)
+- ФОРМАТ — один из: Говорящая голова / Текст на картинке / Видео со вставками b-roll / Карточки-слайды / POV лайфстайл
+- СТРУКТУРА — один из: Чеклист / Таймлайн / Миф vs Правда / Эксперимент / Рейтинг / История с конца / Экспертный разбор / Эмпатия + наука
+- ПОЧЕМУ СЕЙЧАС — связь с актуальным трендом`;
+
+  return callClaude(sys, usr, 3500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ШАГ 2 — ВИРУСНЫЕ РОЛИКИ: АНАЛИЗ И ФИЛЬТРАЦИЯ
+// Источник: instagram-transcribe SKILL.md (шаги 2-3)
+// Метрики: лайки 5000+, репосты 2000+
+// Форматы: говорящая голова / интервью / карточки / провокационный заголовок / сравнение / лайфстайл
+// ══════════════════════════════════════════════════════════════════
+async function step2_reels(reelsUrls, metrics, trends){
+  const sys = `Ты эксперт по вирусному контенту Instagram для ниши health/wellness. Анализируешь ролики для O-Live — сервиса правильного питания в Алматы.
+
+КРИТЕРИИ ОТБОРА роликов:
+| Просмотры | Лайки | Оценка |
+| 10-50к | 200-500 | минимум |
+| 50-150к | 500-3000 | хорошо |
+| 150к-500к | 3000-15000 | отлично |
+| 500к+ | 15000+ | вирус |
+Минимальный порог для O-Live: лайки 5000+, репосты 2000+
+
+ФОРМАТЫ СЪЁМКИ (определить для каждого ролика):
+- Говорящая голова — человек говорит в камеру
+- Интервью — двое, один задаёт вопросы
+- Карточки/список — текст на экране + голос за кадром
+- Провокационный заголовок — цепляющий первый кадр + субтитры
+- Сравнение — это vs то, полезное vs вредное
+- Лайфстайл/процесс — человек занимается делами, поверх текст
+
+ЧТО НЕ БРАТЬ (пропускать):
+- Рецепты и готовку (продукты крупным планом, плита, процесс)
+- Трансформации тела (до/после)
+- Рекламу продуктов`;
+
+  let hasUrls = reelsUrls.trim().length > 0;
+  let usr;
+
+  if(hasUrls){
+    const urls = reelsUrls.split('\n').filter(u=>u.trim()).slice(0,12);
+    const urlList = urls.map((u,i)=>`${i+1}. ${u.trim()}`).join('\n');
+    usr = `Проанализируй ${urls.length} Instagram Reels для O-Live.
+
+ССЫЛКИ:
+${urlList}
+
+${metrics.trim() ? `МЕТРИКИ (указаны пользователем):
+${metrics.trim()}` : 'Метрики не указаны — оцени на основе типа аккаунта и ниши.'}
+
+Для КАЖДОГО ролика дай:
+1. Аккаунт (@username из URL)
+2. Статус: ✅ ПРИНЯТ (метрики соответствуют: лайки 5000+, репосты 2000+) или ❌ ОТКЛОНЁН
+3. Формат съёмки (из списка выше)
+4. Тип хука (провокация / узнавание / обещание / интрига / история с конца / шок-факт / вызов / POV)
+5. Предполагаемая тема (по URL/аккаунту)
+6. Почему этот ролик работает (1-2 предложения)
+
+Итог: ТАБЛИЦА принятых роликов (№ | Аккаунт | Формат | Тип хука | Тема)
+
+Тренды для контекста:
+${trends.slice(0,800)}`;
+  } else {
+    usr = `Роликов не предоставлено. Подбери 8 референсных роликов на основе трендов.
+
+Для каждого референса (из реальных аккаунтов ниши health/wellness):
+1. Аккаунт и предполагаемый URL
+2. Тема ролика (вирусная тема из ниши питания/здоровья)
+3. Метрики (типичные для этого аккаунта)
+4. Формат съёмки
+5. Тип хука
+6. Почему этот ролик работает для аудитории O-Live
+
+Рекомендуемые аккаунты: @glucosegoddess, @drmarkhyman, @hubermanlab, @nutritionist_olesia, @yananutritionist, @ayala.expert, @adletdau, @rhondapatrickphd
+
+Итог: ТАБЛИЦА (№ | Аккаунт | Формат | Тип хука | Тема)
+
+Тренды:
+${trends.slice(0,800)}`;
+  }
+
+  return callClaude(sys, usr, 2500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ШАГ 3 — ТРАНСКРИПЦИЯ + РАСКАДРОВКА
+// Источник: 02-olive-transcribe SKILL.md + instagram-transcribe шаг 5
+// Формат: КАДР 1 / Визуал / Текст на экране / Голос + полная транскрипция
+// ══════════════════════════════════════════════════════════════════
+async function step3_transcription(reelsUrls, reelAnalysis, trends){
+  const sys = `Ты создаёшь раскадровки и транскрипции Instagram Reels для O-Live.
+
+ФОРМАТ РАСКАДРОВКИ (обязательный, для каждого ролика):
+---
+РОЛИК №N
+Аккаунт: @username
+Тема: "Название / хук"
+Метрики: просмотры · лайки · репосты (если известны)
+Ссылка: URL
+
+ФОРМАТ РОЛИКА: [тип — говорящая голова / интервью / карточки / лайфстайл / и т.д.]
+
+РАСКАДРОВКА:
+[КАДР 1]
+Визуал: [что видно — обстановка, кто в кадре]
+Текст на экране: [дословно или "нет"]
+Голос: "[цитата или описание]"
+
+[КАДР 2]
+...
+
+ПОЛНАЯ ТРАНСКРИПЦИЯ / ТЕКСТ:
+[Полный текст. Не додумывать, только то что есть.]
+---
+
+ВАЖНО: не додумывать слова. Только то что реально в ролике или в кэпшене.
+Если транскрипция недоступна — написать: ОШИБКА: не удалось транскрибировать [ссылка]`;
+
+  let hasUrls = reelsUrls.trim().length > 0;
+  let usr;
+
+  if(hasUrls){
+    const urls = reelsUrls.split('\n').filter(u=>u.trim()).slice(0,12);
+    usr = `Создай раскадровки для принятых роликов O-Live.
+
+АНАЛИЗ РОЛИКОВ (из шага 2):
+${reelAnalysis.slice(0,1500)}
+
+ССЫЛКИ:
+${urls.map((u,i)=>`${i+1}. ${u.trim()}`).join('\n')}
+
+Для каждого ПРИНЯТОГО ролика (статус ✅ из шага 2):
+1. Определи формат съёмки
+2. Создай раскадровку по кадрам (используй описание из анализа)
+3. Напиши полный текст/транскрипцию (на основе известного контента аккаунта по данной теме)
+4. Отметь тип хука в КАДРЕ 1
+
+Подсказка по контенту аккаунтов:
+- @glucosegoddess — пишет про глюкозу, инсулин, сахарные пики, лайфхаки с едой
+- @drmarkhyman — функциональная медицина, воспаление, митохондрии
+- @hubermanlab — нейронаука, дофамин, сон, оптимизация
+- @nutritionist_olesia — протоколы питания, гормоны, похудение научно
+- @adletdau — микробиом, кишечник, казахская аудитория
+
+Тренды периода:
+${trends.slice(0,600)}`;
+  } else {
+    usr = `Создай раскадровки на основе анализа референсов.
+
+АНАЛИЗ РЕФЕРЕНСОВ (из шага 2):
+${reelAnalysis.slice(0,1500)}
+
+Тренды периода:
+${trends.slice(0,600)}
+
+Для каждого из 8 референсов — полная раскадровка:
+[КАДР 1] ХУК (цепляющий, конкретный)
+[КАДР 2] ПРОБЛЕМА/УЗНАВАНИЕ
+[КАДРЫ 3-4] ОБЪЯСНЕНИЕ/МЕХАНИЗМ с терминами
+[КАДРЫ 5-6] УГЛУБЛЕНИЕ + цифры
+[КАДР 7] РЕШЕНИЕ
+И полный текст как будто это транскрипция ролика.`;
+  }
+
+  return callClaude(sys, usr, 4000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ШАГ 4 — СЦЕНАРИИ
+// Источник: olive-content-agent SKILL.md — шаг 4
+// СТРОГО: 7-8 кадров, все хуки, форматы, структуры, O-Live каждый 4-й, CTA, референс обязателен
+// ══════════════════════════════════════════════════════════════════
+async function step4_scenarios(trends, transcriptions, count, from, to){
+  const sys = `Ты опытный сценарист для O-Live — сервиса правильного питания в Алматы (доставка готовых рационов).
+
+АУДИТОРИЯ:
+- 70% женщины, 30% мужчины, 25-45 лет, Алматы, средний+ доход
+- Тон: эксперт-друг, без давления. НЕ про похудение — про энергию, здоровье, долголетие.
+
+ТЕМЫ ДА: здоровье, гормоны, энергия, микробиом, анализы, биохакинг, долголетие, стресс, сон
+ТЕМЫ НЕТ: диеты, рецепты, похудение к дате, готовка, сезонные акции
+
+═══ СТРОГИЕ ПРАВИЛА СЦЕНАРИЕВ ═══
+
+СТРУКТУРА — РОВНО 7-8 КАДРОВ:
+[КАДР 1] ХУК — максимум 2 предложения. Конкретика/цифры. БЕЗ вводных фраз "Сегодня расскажу", "Привет, я..."
+[КАДР 2] ПРОБЛЕМА / УЗНАВАНИЕ
+[КАДРЫ 3-4] ОБЪЯСНЕНИЕ МЕХАНИЗМА + расшифровка терминов (простым языком)
+[КАДРЫ 5-6] УГЛУБЛЕНИЕ + цифры / неожиданный поворот
+[КАДР 7] КОНКРЕТНОЕ РЕШЕНИЕ
+[КАДР 8] ТОЛЬКО для каждого 4-го сценария (№4, №8, №12...) — интеграция O-Live
+
+ТИПЫ ХУКОВ (чередовать, каждый УНИКАЛЕН, не повторять):
+ПРОВОКАЦИЯ / УЗНАВАНИЕ / ОБЕЩАНИЕ / ИНТРИГА / ИСТОРИЯ С КОНЦА / ШОК-ФАКТ / ВЫЗОВ / POV
+
+ФОРМАТЫ СЪЁМКИ (СТРОГО чередовать, НЕ повторять два подряд):
+Говорящая голова / Текст на картинке / Видео со вставками b-roll / Карточки-слайды / POV лайфстайл
+
+СТРУКТУРЫ ПОДАЧИ (чередовать):
+Чеклист / Таймлайн / Миф vs Правда / Эксперимент / Рейтинг / История с конца / Экспертный разбор / Эмпатия + наука
+
+O-LIVE ИНТЕГРАЦИЯ (строго каждый 4-й, ТОЛЬКО в КАДРЕ 8):
+Переход: "мы понимаем, что вписать всё это в жизнь сложно"
+Акции (выбрать одну): 5 дней — 2 в подарок / 14 дней — 3 в подарок / 30 дней — 10 в подарок
+
+CTA: в конце КАЖДОГО сценария — конкретный призыв (сохрани / поделись / напиши в комментариях)
+РЕФЕРЕНС: обязательная ссылка на реальный аккаунт или научную статью. БЕЗ референса сценарий не готов.
+
+САМОПРОВЕРКА перед каждым сценарием:
+✓ Формат съёмки НЕ совпадает с предыдущим?
+✓ Тип хука НЕ повторяется?
+✓ Есть референс (реальная ссылка)?
+✓ Кадров 7 или 8?
+✓ Если сценарий №4/8/12... — есть КАДР 8 с O-Live?
+✓ Хук: максимум 2 предложения, конкретика, без вводных слов?`;
+
+  const usr = `Создай РОВНО ${count} сценариев для Instagram Reels O-Live, период: ${fmtRu(from)} — ${fmtRu(to)}.
+
+ТРЕНДЫ И ИДЕИ (используй для тем):
+${trends.slice(0,1800)}
+
+ТРАНСКРИПЦИИ И РАСКАДРОВКИ (адаптируй под O-Live):
+${transcriptions.slice(0,2000)}
+
+═══ ФОРМАТ КАЖДОГО СЦЕНАРИЯ (строго соблюдать) ═══
+
+═══════════════════════════════════════════
+СЦЕНАРИЙ [N]: [НАЗВАНИЕ ТЕМЫ]
+Тип хука: [из списка]
+Формат съёмки: [из списка]
+Структура подачи: [из списка]
+Референс: [реальная ссылка — аккаунт или статья]
+───────────────────────────────────────────
+[КАДР 1 — ХУК]
+[текст — макс. 2 предложения, конкретика, цифры, без вводных фраз]
+
+[КАДР 2 — ПРОБЛЕМА / УЗНАВАНИЕ]
+[текст]
+
+[КАДРЫ 3-4 — МЕХАНИЗМ + ТЕРМИНЫ]
+[текст — объясни просто, расшифруй термины]
+
+[КАДРЫ 5-6 — УГЛУБЛЕНИЕ + ЦИФРЫ]
+[текст — данные, исследования, неожиданный факт]
+
+[КАДР 7 — РЕШЕНИЕ]
+[текст — конкретный, применимый]
+
+[КАДР 8 — O-LIVE] (ТОЛЬКО сценарии №4, №8, №12...):
+"Мы понимаем, что вписать всё это в жизнь сложно..."
+[интеграция + акция]
+
+CTA: [конкретный призыв к действию]
+═══════════════════════════════════════════
+
+Напиши ВСЕ ${count} сценариев ПОЛНОСТЬЮ. Не сокращай. Не пропускай кадры.`;
+
+  return callClaude(sys, usr, 10000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ШАГ 5 — КОНТЕНТ-ПЛАН (JSON)
+// Источник: olive-content-agent SKILL.md — шаг 5
+// Лист "[Месяц]": день/дата/тема/хук/полный текст поста/казахский/ссылка
+// Лист "категории": по неделям Пн-Вс
+// ══════════════════════════════════════════════════════════════════
+async function step5_plan(scenarios, count, from, to){
+  const sys = `Ты составляешь контент-план для O-Live.
+Публикации СТРОГО только: Понедельник, Среда, Пятница, Воскресенье.
+Верни ТОЛЬКО валидный JSON массив — без markdown, без текста вокруг.`;
+
+  const usr = `Составь контент-план на РОВНО ${count} постов, период ${fmtRu(from)} — ${fmtRu(to)}.
+Публикации ТОЛЬКО: Пн, Ср, Пт, Вс. Начало: ${from}. Конец не позднее: ${to}.
+
+Из сценариев ниже для каждого поста извлеки:
+- Тему и хук
+- Напиши полный текст поста (3-5 абзацев для Instagram caption, образовательный, с фактами и эмоцией)
+- Переведи текст поста на казахский язык (полный перевод, не краткий)
+- Укажи реальный референс из сценария
+
+СЦЕНАРИИ:
+${scenarios.slice(0,5000)}
+
+JSON массив из ${count} объектов:
+[
+  {
+    "n": 1,
+    "date": "${from}",
+    "day": "Понедельник",
+    "category": "Гормоны",
+    "theme": "Точное название темы",
+    "hook": "Полный текст хука из сценария",
+    "format": "Говорящая голова",
+    "structure": "Экспертный разбор",
+    "postText": "Полный текст поста на русском. 3-5 абзацев. Образовательный, с фактами. Для Instagram caption.",
+    "postKz": "Полный перевод поста на казахский язык.",
+    "ref": "https://ссылка-референс",
+    "olive": false
+  }
+]
+
+Категории: Гормоны / Биохакинг / Энергия / Микробиом / Питание / Лонджевити / Здоровье / Сон / Стресс
+olive: true ТОЛЬКО для постов №4, №8, №12, №16...`;
+
+  const raw = await callClaude(sys, usr, 9000);
+  try {
+    const m = raw.match(/\[[\s\S]*\]/);
+    if(m) return JSON.parse(m[0]);
+  } catch(_){}
+  log('⚠️ JSON не распознан — генерирую базовый план');
+  return fallbackPlan(count, from, to);
+}
+
+function fallbackPlan(count, from, to){
+  const pub=[1,3,5,0], days=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const cats=['Гормоны','Биохакинг','Энергия','Микробиом','Питание','Лонджевити','Здоровье'];
+  const fmts=['Говорящая голова','Текст на картинке','Видео со вставками b-roll','Карточки-слайды','POV лайфстайл'];
+  let cur=new Date(from), end=new Date(to), plan=[], n=0;
+  while(cur<=end && n<count){
+    if(pub.includes(cur.getDay())){
+      n++;
+      plan.push({n, date:fmtDate(new Date(cur)), day:days[cur.getDay()], category:cats[n%cats.length],
+        theme:`Тема ${n}`, hook:`Хук ${n}`, format:fmts[n%fmts.length], structure:'Экспертный разбор',
+        postText:`Текст поста ${n} на русском.`, postKz:`Пост ${n} на казахском.`, ref:'—', olive:n%4===0});
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  return plan;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ШАГ 6 — ГЕНЕРАЦИЯ ФАЙЛОВ
+// HTML: зелёный фон у хука (2D6A4F), CTA жирный зелёный, референс серый курсив
+// XLSX: лист "[Месяц]" + лист "категории" (по скилу olive-content-agent шаг 5)
+// ══════════════════════════════════════════════════════════════════
+function buildDocHtml(scenarios, from, to, count){
+  const MY = monthName(from);
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Сценарии O-Live — ${MY}</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:820px;margin:40px auto;padding:0 24px;color:#1F2937;background:#fff}
+  h1{color:#2D6A4F;border-bottom:3px solid #2D6A4F;padding-bottom:12px;margin-bottom:6px}
+  .info{color:#6B7280;font-size:13px;margin-bottom:28px}
+  .scenario-wrap{margin-bottom:0}
+  .sep{border:none;border-top:2px solid #2D6A4F;margin:36px 0}
+  .sc-title{color:#2D6A4F;background:#EAF4EE;padding:12px 16px;border-radius:6px;font-size:15px;font-weight:700;margin-bottom:8px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tag{background:#EAF4EE;color:#4A7C59;font-size:11px;padding:2px 10px;border-radius:20px;font-weight:700}
+  .frame-lbl{font-size:10.5px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 3px;padding-top:8px;border-top:1px solid #EAF4EE}
+  .hook-lbl{color:#2D6A4F!important;border-top:none!important;margin-top:0!important}
+  .hook-text{background:#2D6A4F;color:#fff;padding:12px 16px;border-radius:6px;font-weight:700;font-size:15px;line-height:1.55;margin:2px 0 6px}
+  .frame-text{font-size:14px;line-height:1.7;margin:3px 0 8px;color:#1F2937}
+  .olive-frame{background:#EAF4EE;border-left:4px solid #2D6A4F;padding:10px 14px;border-radius:4px;margin:8px 0}
+  .cta{font-weight:700;color:#2D6A4F;font-size:14px;margin:14px 0 6px;padding:8px 12px;background:#EAF4EE;border-radius:6px}
+  .ref{font-style:italic;color:#6B7280;font-size:12px;margin-top:4px}
+  .ref a{color:#6B7280}
+  pre{white-space:pre-wrap;font-family:Arial,sans-serif;font-size:13.5px;line-height:1.75}
+  @media print{.sep{page-break-before:always;border:none}}
+</style>
+</head>
+<body>
+<h1>🌿 Сценарии O-Live — ${MY}</h1>
+<div class="info">Период: ${fmtRu(from)} — ${fmtRu(to)} &nbsp;·&nbsp; Постов: ${count} &nbsp;·&nbsp; Создано: ${new Date().toLocaleDateString('ru')}</div>
+<pre>${esc(scenarios)}</pre>
+</body>
+</html>`;
+}
+
+function buildXlsx(plan, from, to){
+  const wb = XLSX.utils.book_new();
+  const MN = monthShort(from);
+  const MY = monthName(from);
+
+  // ── Лист 1: "[Месяц]" ── строго по скилу: день недели / дата / тема / хук / текст поста / казахский / ссылка
+  const h1 = ['№','День недели','Дата','Категория','Тема','Хук','Формат съёмки','Структура подачи','Текст поста (RU)','Текст поста (KZ)','Референс','O-Live интеграция'];
+  const r1 = plan.map(p=>[
+    p.n, p.day||'', p.date||'', p.category||'',
+    p.theme||'', p.hook||'',
+    p.format||'', p.structure||'',
+    p.postText||'', p.postKz||'',
+    p.ref||'—', p.olive?'✅ Интеграция O-Live':''
+  ]);
+  const ws1 = XLSX.utils.aoa_to_sheet([h1,...r1]);
+  ws1['!cols'] = [
+    {wch:4},{wch:13},{wch:12},{wch:14},{wch:28},{wch:40},
+    {wch:22},{wch:20},{wch:55},{wch:55},{wch:30},{wch:16}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, MN);
+
+  // ── Лист 2: "категории" ── по скилу: заголовок Пн/Вт/Ср/Чт/Пт/Сб/Вс, по каждой неделе — дата/категория/темы/формат
+  // Группируем по неделям
+  const weekMap = {};
+  plan.forEach(p=>{
+    const d=new Date(p.date+' '), mon=new Date(d);
+    const dow=d.getDay(); const diff=dow===0?-6:1-dow;
+    mon.setDate(d.getDate()+diff);
+    const wk=fmtDate(mon);
+    if(!weekMap[wk]) weekMap[wk]=[];
+    weekMap[wk].push(p);
+  });
+
+  const catHead = ['Неделя','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье','Категории','Форматы'];
+  const catRows = [];
+  Object.entries(weekMap).sort().forEach(([wk,posts])=>{
+    const dm={};
+    posts.forEach(p=>{ const dow=new Date(p.date+' ').getDay(); dm[dow]=p; });
+    const cats=[...new Set(posts.map(p=>p.category||'').filter(Boolean))].join(', ');
+    const fmts=[...new Set(posts.map(p=>p.format||'').filter(Boolean))].join(', ');
+    const cell=(p)=> p ? `${p.date}\n${p.category||''}\n${p.theme||''}\n[${p.format||''}]` : '—';
+    catRows.push([`Неделя с ${wk}`, cell(dm[1]), cell(dm[2]), cell(dm[3]), cell(dm[4]), cell(dm[5]), cell(dm[6]), cell(dm[0]), cats, fmts]);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet([catHead,...catRows]);
+  ws2['!cols'] = [{wch:14},{wch:24},{wch:14},{wch:24},{wch:14},{wch:24},{wch:14},{wch:24},{wch:28},{wch:36}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'категории');
+
+  return wb;
+}
+
+// ── Downloads ──
+function dlDoc(){ if(!_docHtml)return; const b=new Blob([_docHtml],{type:'text/html;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`Сценарии_Олив_${_month}.html`; a.click(); URL.revokeObjectURL(a.href); }
+function dlXls(){ if(!_xlsWb)return; XLSX.writeFile(_xlsWb,`Контент-план_${_month}.xlsx`); }
+
+// ══════════════════════════════════════════════════════════════════
+// ГЛАВНЫЙ WORKFLOW — 6 ШАГОВ
+// ══════════════════════════════════════════════════════════════════
+async function runWorkflow(){
+  const key = document.getElementById('apiKey').value.trim()||_key;
+  if(!key||!key.startsWith('sk-ant-')){ alert('Введи и сохрани API ключ Anthropic (начинается с sk-ant-)'); return; }
+  _key = key;
+
+  const from    = document.getElementById('dateFrom').value;
+  const to      = document.getElementById('dateTo').value;
+  const count   = parseInt(document.getElementById('postsRange').value);
+  const reels   = document.getElementById('reelsInput').value;
+  const metrics = document.getElementById('metricsInput').value;
+
+  if(!from||!to){ alert('Выбери период'); return; }
+
+  _month = monthName(from);
+  _docHtml=''; _xlsWb=null;
+
+  document.getElementById('progressCard').classList.remove('hidden');
+  document.getElementById('resultsCard').classList.add('hidden');
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('logBox').innerHTML = '';
+  ['s1','s2','s3','s4','s5','s6'].forEach(id=>setStep(id,''));
+  progress(0,'Запуск workflow...');
+
+  try {
+
+    // ── ШАГ 1: Тренды + Топ-10 идей ──
+    setStep('s1','running');
+    progress(3,'Шаг 1: Ищем тренды (4-5 источников)...');
+    log('ШАГ 1 — тренды: 4-5 параллельных источников + фильтрация + топ-10 идей с хуком и форматом');
+    const trends = await step1_trends(from, to);
+    const ideasCount = (trends.match(/^\d+\./mg)||[]).length;
+    setStep('s1','done', `Тренды найдены · ${ideasCount} идей для роликов сформировано`);
+    progress(18,'Шаг 1 ✓ — тренды и идеи готовы');
+
+    // ── ШАГ 2: Вирусные ролики ──
+    setStep('s2','running');
+    progress(22,'Шаг 2: Анализируем ролики и метрики...');
+    log('ШАГ 2 — анализ роликов: метрики (лайки 5000+, репосты 2000+), форматы, типы хуков');
+    const reelAnalysis = await step2_reels(reels, metrics, trends);
+    const accepted = (reelAnalysis.match(/✅ ПРИНЯТ/g)||[]).length;
+    setStep('s2','done', reels.trim() ? `Проанализировано роликов · принято: ${accepted}` : 'Референсы подобраны по трендам');
+    progress(38,'Шаг 2 ✓ — ролики проанализированы');
+
+    // ── ШАГ 3: Транскрипция + Раскадровка ──
+    setStep('s3','running');
+    progress(42,'Шаг 3: Создаём раскадровки и транскрипции...');
+    log('ШАГ 3 — транскрипция + раскадровка по кадрам для каждого ролика');
+    const transcriptions = await step3_transcription(reels, reelAnalysis, trends);
+    const reelCount = (transcriptions.match(/РОЛИК №\d+/g)||[]).length;
+    setStep('s3','done', `Раскадровки созданы · ${reelCount} роликов разобрано`);
+    progress(58,'Шаг 3 ✓ — транскрипции и раскадровки готовы');
+
+    // ── ШАГ 4: Сценарии ──
+    setStep('s4','running', `Пишем ${count} сценариев строго по правилам...`);
+    progress(62,`Шаг 4: Создаём ${count} сценариев (7-8 кадров, хуки, форматы, O-Live каждый 4-й)...`);
+    log(`ШАГ 4 — ${count} сценариев: 7-8 кадров, все типы хуков, чередование форматов, O-Live каждый 4-й, CTA+референс`);
+    const scenarios = await step4_scenarios(trends, transcriptions, count, from, to);
+    const scCount = (scenarios.match(/СЦЕНАРИЙ \d+/g)||[]).length;
+    setStep('s4','done', `${scCount} сценариев готово · O-Live в каждом 4-м`);
+    progress(78,'Шаг 4 ✓ — сценарии написаны');
+
+    // ── ШАГ 5: Контент-план ──
+    setStep('s5','running');
+    progress(82,'Шаг 5: Составляем контент-план (текст + казахский)...');
+    log('ШАГ 5 — контент-план: Пн/Ср/Пт/Вс, полный текст поста РУ+КЗ, ссылки, 2 листа xlsx');
+    const plan = await step5_plan(scenarios, count, from, to);
+    setStep('s5','done', `${plan.length} постов · текст РУ+КЗ · 2 листа xlsx`);
+    progress(93,'Шаг 5 ✓ — контент-план готов');
+
+    // ── ШАГ 6: Файлы ──
+    setStep('s6','running');
+    progress(95,'Шаг 6: Генерируем файлы...');
+    log('ШАГ 6 — генерация: Сценарии.html (зелёные хуки) + Контент-план.xlsx (листы: Месяц + категории)');
+    _docHtml = buildDocHtml(scenarios, from, to, count);
+    _xlsWb   = buildXlsx(plan, from, to);
+    setStep('s6','done', 'Файлы готовы к скачиванию');
+    progress(100,'🎉 Workflow завершён!');
+
+    // Results
+    document.getElementById('rDocName').textContent = `Сценарии_Олив_${_month}.html`;
+    document.getElementById('rDocMeta').textContent = `${Math.round(_docHtml.length/1024)} КБ · ${scCount} сценариев`;
+    document.getElementById('rXlsName').textContent = `Контент-план_${_month}.xlsx`;
+    document.getElementById('rXlsMeta').textContent = `${plan.length} постов · РУ + КЗ · 2 листа`;
+    document.getElementById('preview').textContent  = scenarios.slice(0,700)+'\n\n…[полная версия — скачай файл]…';
+    document.getElementById('resultsCard').classList.remove('hidden');
+    document.getElementById('resultsCard').scrollIntoView({behavior:'smooth'});
+    log('✅ Все 6 шагов выполнены успешно!');
+
+  } catch(e){
+    log('❌ ОШИБКА: ' + e.message);
+    const local = location.protocol==='file:';
+    alert((local?'⚠️ Сайт открыт локально — загрузи на GitHub Pages!\n\n':'')+'Ошибка: '+e.message);
+  } finally {
+    document.getElementById('runBtn').disabled = false;
+  }
+}
+
+function resetWf(){
+  document.getElementById('progressCard').classList.add('hidden');
+  document.getElementById('resultsCard').classList.add('hidden');
+  ['s1','s2','s3','s4','s5','s6'].forEach(id=>setStep(id,''));
+  progress(0,'Запуск workflow...');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
